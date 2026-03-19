@@ -57,23 +57,6 @@ Open **ESC → Settings → Addons → DidYouDie** to:
 | **Reset counter** | Resets the death count back to zero |
 | **Unlock key** | Choose which key unlocks the Release Spirit button (Shift / Ctrl / Alt / None) |
 
----
-
-## Compatibility
-
-| Version | Status |
-|---|---|
-| The War Within (11.x) | ✅ Supported |
-| Dragonflight (10.x) | ✅ Supported |
-| Wrath Classic | ❌ Not tested |
-
----
-
-## Contributing
-
-Pull requests are welcome! If you have a great taunt line to add, open an issue or PR.
-
-The taunt lines live in `BleibLiegen.lua` in the `TAUNT_LINES` table — easy to extend.
 
 ---
 
