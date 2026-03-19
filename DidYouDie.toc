@@ -1,6 +1,6 @@
 ## Interface: 120001
 ## Title: DidYouDie
-## Notes: Zeigt eine Nachricht und zählt deine Tode.
+## Notes: Shows a message and counts deaths
 ## Author: Biene
 ## Version: 1.1
 ## SavedVariables: DidYouDieDB
