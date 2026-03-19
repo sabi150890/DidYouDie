@@ -1,31 +1,8 @@
+-- DidYouDie.lua
+-- -------------------------------------------------------
 -- 1. Datenbank & Hauptvariablen
-local function InitializeDB()
-    if not DidYouDieDB then
-        DidYouDieDB = { count = 0, unlockKey = 1 }
-    end
-    if not DidYouDieDB.unlockKey then
-        DidYouDieDB.unlockKey = 1
-    end
-end
-
 -- -------------------------------------------------------
--- 2. Das visuelle Warn-Element
--- -------------------------------------------------------
-local FRAME_W = 800
-local FRAME_H = 180
-
-local deathFrame = CreateFrame("Frame", "DidYouDieDeathFrame", UIParent)
-deathFrame:SetSize(FRAME_W, FRAME_H)
-deathFrame:SetFrameStrata("TOOLTIP")
-deathFrame:Hide()
-
-local deathText = deathFrame:CreateFontString(nil, "OVERLAY")
-deathText:SetFont("Fonts\\FRIZQT__.TTF", 72, "OUTLINE, THICKOUTLINE")
-deathText:SetPoint("TOP", deathFrame, "TOP", 0, 0)
-deathText:SetTextColor(1, 0, 0, 1)
-
--- Frecher Kommentar in Weiß
-local TAUNT_LINES = {
+local DEFAULT_TAUNT_LINES = {
     -- Klassiker
     "Na keinen CD gezogen?",
     "Skill issue.",
@@ -86,6 +63,62 @@ local TAUNT_LINES = {
     "Schon wieder?",
 }
 
+local function InitializeDB()
+    if not DidYouDieDB then
+        DidYouDieDB = {}
+    end
+    if not DidYouDieDB.count then
+        DidYouDieDB.count = 0
+    end
+    if not DidYouDieDB.unlockKey then
+        DidYouDieDB.unlockKey = 1
+    end
+    -- customLines: array of strings added by user
+    if not DidYouDieDB.customLines then
+        DidYouDieDB.customLines = {}
+    end
+    -- disabledDefaults: set of indices (1-based) into DEFAULT_TAUNT_LINES that are disabled
+    if not DidYouDieDB.disabledDefaults then
+        DidYouDieDB.disabledDefaults = {}
+    end
+end
+
+-- -------------------------------------------------------
+-- Helper: build active line pool for random pick
+-- -------------------------------------------------------
+local function BuildActiveLines()
+    local lines = {}
+    for i, line in ipairs(DEFAULT_TAUNT_LINES) do
+        if not DidYouDieDB.disabledDefaults[i] then
+            lines[#lines + 1] = line
+        end
+    end
+    for _, line in ipairs(DidYouDieDB.customLines) do
+        lines[#lines + 1] = line
+    end
+    -- fallback so we never have zero lines
+    if #lines == 0 then
+        lines[1] = "Skill issue."
+    end
+    return lines
+end
+
+-- -------------------------------------------------------
+-- 2. Das visuelle Warn-Element
+-- -------------------------------------------------------
+local FRAME_W = 800
+local FRAME_H = 180
+
+local deathFrame = CreateFrame("Frame", "DidYouDieDeathFrame", UIParent)
+deathFrame:SetSize(FRAME_W, FRAME_H)
+deathFrame:SetFrameStrata("TOOLTIP")
+deathFrame:Hide()
+
+local deathText = deathFrame:CreateFontString(nil, "OVERLAY")
+deathText:SetFont("Fonts\\FRIZQT__.TTF", 72, "OUTLINE, THICKOUTLINE")
+deathText:SetPoint("TOP", deathFrame, "TOP", 0, 0)
+deathText:SetTextColor(1, 0, 0, 1)
+
 local tauntText = deathFrame:CreateFontString(nil, "OVERLAY")
 tauntText:SetFont("Fonts\\FRIZQT__.TTF", 28, "OUTLINE")
 tauntText:SetPoint("TOP", deathText, "BOTTOM", 0, -8)
@@ -95,7 +128,6 @@ tauntText:SetTextColor(1, 1, 1, 1)
 -- DVD-Bounce Physik
 -- -------------------------------------------------------
 local SPEED = 180
-
 local posX, posY = 0, 0
 local vx, vy     = SPEED, SPEED * 0.7
 
@@ -114,19 +146,14 @@ deathFrame:SetScript("OnUpdate", function(self, elapsed)
     posY = posY + vy * elapsed
 
     if posX >= limitX then
-        posX = limitX
-        vx = -math.abs(vx)
+        posX = limitX; vx = -math.abs(vx)
     elseif posX <= -limitX then
-        posX = -limitX
-        vx =  math.abs(vx)
+        posX = -limitX; vx = math.abs(vx)
     end
-
     if posY >= limitY then
-        posY = limitY
-        vy = -math.abs(vy)
+        posY = limitY; vy = -math.abs(vy)
     elseif posY <= -limitY then
-        posY = -limitY
-        vy =  math.abs(vy)
+        posY = -limitY; vy = math.abs(vy)
     end
 
     self:ClearAllPoints()
@@ -139,18 +166,12 @@ end)
 local animationGroup = deathFrame:CreateAnimationGroup()
 
 local alphaOut = animationGroup:CreateAnimation("Alpha")
-alphaOut:SetFromAlpha(1)
-alphaOut:SetToAlpha(0.1)
-alphaOut:SetDuration(0.4)
-alphaOut:SetOrder(1)
-alphaOut:SetSmoothing("IN_OUT")
+alphaOut:SetFromAlpha(1); alphaOut:SetToAlpha(0.1)
+alphaOut:SetDuration(0.4); alphaOut:SetOrder(1); alphaOut:SetSmoothing("IN_OUT")
 
 local alphaIn = animationGroup:CreateAnimation("Alpha")
-alphaIn:SetFromAlpha(0.1)
-alphaIn:SetToAlpha(1)
-alphaIn:SetDuration(0.4)
-alphaIn:SetOrder(2)
-alphaIn:SetSmoothing("IN_OUT")
+alphaIn:SetFromAlpha(0.1); alphaIn:SetToAlpha(1)
+alphaIn:SetDuration(0.4); alphaIn:SetOrder(2); alphaIn:SetSmoothing("IN_OUT")
 
 animationGroup:SetLooping("REPEAT")
 
@@ -158,10 +179,10 @@ animationGroup:SetLooping("REPEAT")
 -- 3. Die "Geist freilassen" Sperre (konfigurierbare Taste)
 -- -------------------------------------------------------
 local KEY_OPTIONS = {
-    { label = "Shift",  check = IsShiftKeyDown                 },
-    { label = "Strg",   check = IsControlKeyDown               },
-    { label = "Alt",    check = IsAltKeyDown                   },
-    { label = "Keine",  check = function() return true end     },
+    { label = "Shift", check = IsShiftKeyDown               },
+    { label = "Strg",  check = IsControlKeyDown             },
+    { label = "Alt",   check = IsAltKeyDown                 },
+    { label = "Keine", check = function() return true end   },
 }
 
 local selectedKeyIndex = 1
@@ -195,7 +216,7 @@ lockFrame:SetScript("OnUpdate", function(self, elapsed)
 end)
 
 -- -------------------------------------------------------
--- 4. Options-Panel & Reset
+-- 4. Options-Panel
 -- -------------------------------------------------------
 local panel = CreateFrame("Frame", "DidYouDieOptionsPanel", UIParent)
 panel.name = "DidYouDie"
@@ -207,16 +228,16 @@ title:SetText("DidYouDie Einstellungen")
 
 -- Todesanzahl
 local statText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-statText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -20)
+statText:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
 
 local function UpdateMenuText()
     local count = (DidYouDieDB and DidYouDieDB.count) or 0
     statText:SetText("Gesamtanzahl der Tode: |cFFFF0000" .. count .. "|r")
 end
 
--- Reset-Button
+-- Reset-Button (Zähler)
 local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-resetButton:SetPoint("TOPLEFT", statText, "BOTTOMLEFT", 0, -12)
+resetButton:SetPoint("TOPLEFT", statText, "BOTTOMLEFT", 0, -8)
 resetButton:SetText("Zähler zurücksetzen")
 resetButton:SetSize(160, 25)
 resetButton:SetScript("OnClick", function()
@@ -226,10 +247,9 @@ end)
 
 -- Abschnitt: Tastenauswahl
 local keyHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-keyHeader:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -20)
+keyHeader:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -16)
 keyHeader:SetText("Taste zum Freischalten des Geist-Buttons:")
 
--- Radio-Buttons werden in einer Tabelle gespeichert damit wir sie updaten können
 local radioButtons = {}
 
 local function UpdateRadioButtons()
@@ -241,10 +261,9 @@ end
 local prevAnchor = keyHeader
 for i, option in ipairs(KEY_OPTIONS) do
     local rb = CreateFrame("CheckButton", "DidYouDieKey" .. i, panel, "UIRadioButtonTemplate")
-    rb:SetPoint("TOPLEFT", prevAnchor, "BOTTOMLEFT", 0, -8)
+    rb:SetPoint("TOPLEFT", prevAnchor, "BOTTOMLEFT", 0, -6)
     rb.value = i
 
-    -- Label neben dem Radio-Button
     local lbl = rb:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     lbl:SetPoint("LEFT", rb, "RIGHT", 4, 0)
     lbl:SetText(option.label)
@@ -258,6 +277,259 @@ for i, option in ipairs(KEY_OPTIONS) do
     radioButtons[i] = rb
     prevAnchor = rb
 end
+
+-- -------------------------------------------------------
+-- Spruch-Liste
+-- -------------------------------------------------------
+local listHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+listHeader:SetPoint("TOPLEFT", prevAnchor, "BOTTOMLEFT", 0, -20)
+listHeader:SetText("Sprüche:")
+
+-- Legende
+local legendDefault = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+legendDefault:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 4, -4)
+legendDefault:SetText("|cFFAAAAAA■|r Default    |cFFFFFFFF■|r Custom")
+
+-- "Reset to Default"-Button (rechts vom Header)
+local resetLinesButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+resetLinesButton:SetPoint("LEFT", listHeader, "RIGHT", 12, 0)
+resetLinesButton:SetText("Defaults zurücksetzen")
+resetLinesButton:SetSize(160, 22)
+
+-- Eingabezeile: EditBox + Hinzufügen-Button
+-- Wir platzieren diese OBERHALB der Scroll-Liste damit der Benutzer nicht scrollen muss
+local addBox = CreateFrame("EditBox", "DidYouDieAddBox", panel, "InputBoxTemplate")
+addBox:SetPoint("TOPLEFT", legendDefault, "BOTTOMLEFT", 0, -10)
+addBox:SetSize(340, 22)
+addBox:SetAutoFocus(false)
+addBox:SetMaxLetters(200)
+
+local addButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+addButton:SetPoint("LEFT", addBox, "RIGHT", 6, 0)
+addButton:SetText("Hinzufügen")
+addButton:SetSize(100, 22)
+
+-- -------------------------------------------------------
+-- ScrollFrame für die Spruch-Liste
+-- -------------------------------------------------------
+local SCROLL_HEIGHT = 260
+local ROW_HEIGHT    = 22
+
+-- Hintergrund-Container mit WoW-typischer dunkler Box
+local listBg = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
+listBg:SetPoint("TOPLEFT", addBox, "BOTTOMLEFT", -4, -12)
+listBg:SetSize(556, SCROLL_HEIGHT + 8)
+
+local scrollFrame = CreateFrame("ScrollFrame", "DidYouDieScrollFrame", panel, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", addBox, "BOTTOMLEFT", 2, -16)
+scrollFrame:SetSize(516, SCROLL_HEIGHT)
+
+local scrollChild = CreateFrame("Frame", "DidYouDieScrollChild", scrollFrame)
+scrollChild:SetSize(500, 1)   -- Höhe wird dynamisch gesetzt
+scrollFrame:SetScrollChild(scrollChild)
+
+-- Zebra-Hintergrundfarben für Zeilen
+local function SetRowBg(row, rowIndex, disabled)
+    if not row.bg then
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetAllPoints()
+    end
+    if disabled then
+        row.bg:SetColorTexture(0.35, 0.08, 0.08, 0.55)
+    elseif rowIndex % 2 == 0 then
+        row.bg:SetColorTexture(0.0, 0.0, 0.0, 0.25)
+    else
+        row.bg:SetColorTexture(1.0, 1.0, 1.0, 0.03)
+    end
+end
+
+-- Pool für Zeilen-Widgets
+local rowPool = {}
+
+local function GetOrCreateRow(index)
+    if not rowPool[index] then
+        local row = CreateFrame("Frame", nil, scrollChild)
+        row:SetSize(498, ROW_HEIGHT)
+
+        -- Toggle-Button: Icon-only, kein UIPanelButtonTemplate-Rahmen
+        local toggle = CreateFrame("Button", nil, row)
+        toggle:SetSize(20, 20)
+        toggle:SetPoint("LEFT", row, "LEFT", 4, 0)
+
+        -- Icon-Textur für aktiv (grüner Haken)
+        local iconEnabled = toggle:CreateTexture(nil, "ARTWORK")
+        iconEnabled:SetAllPoints()
+        iconEnabled:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+        iconEnabled:SetVertexColor(0.2, 1.0, 0.2, 1)
+        toggle.iconEnabled = iconEnabled
+
+        -- Icon-Textur für deaktiviert (rotes X)
+        local iconDisabled = toggle:CreateTexture(nil, "ARTWORK")
+        iconDisabled:SetAllPoints()
+        iconDisabled:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+        iconDisabled:SetVertexColor(1.0, 0.25, 0.25, 1)
+        toggle.iconDisabled = iconDisabled
+
+        -- Hover-Highlight
+        local hl = toggle:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        hl:SetBlendMode("ADD")
+        hl:SetAlpha(0.4)
+
+        row.toggle = toggle
+
+        -- Trennlinie unten
+        local sep = row:CreateTexture(nil, "BORDER")
+        sep:SetHeight(1)
+        sep:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        sep:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        sep:SetColorTexture(1, 1, 1, 0.06)
+
+        -- Spruch-Text
+        local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        text:SetPoint("LEFT", toggle, "RIGHT", 6, 0)
+        text:SetPoint("RIGHT", row, "RIGHT", 26, 0)
+        text:SetJustifyH("LEFT")
+        text:SetWordWrap(false)
+        row.text = text
+
+        -- Löschen-Button (nur Custom): kleines rotes X rechts
+        local del = CreateFrame("Button", nil, row)
+        del:SetSize(18, 18)
+        del:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+
+        local delTex = del:CreateTexture(nil, "ARTWORK")
+        delTex:SetAllPoints()
+        delTex:SetTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+        delTex:SetVertexColor(1, 0.3, 0.3, 1)
+
+        local delHl = del:CreateTexture(nil, "HIGHLIGHT")
+        delHl:SetAllPoints()
+        delHl:SetTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+        delHl:SetVertexColor(1, 0.7, 0.7, 1)
+
+        row.del = del
+
+        rowPool[index] = row
+    end
+    return rowPool[index]
+end
+
+-- Hilfsfunktion: Toggle-Icons umschalten
+local function SetToggleState(toggle, enabled)
+    if enabled then
+        toggle.iconEnabled:Show()
+        toggle.iconDisabled:Hide()
+    else
+        toggle.iconEnabled:Hide()
+        toggle.iconDisabled:Show()
+    end
+end
+
+-- Forward-Declare RefreshList so callbacks can call it
+local RefreshList
+
+RefreshList = function()
+    -- Verstecke alle alten Rows
+    for _, row in ipairs(rowPool) do
+        row:Hide()
+    end
+
+    local y = 0
+    local rowIndex = 0
+
+    -- 1) Default-Sprüche
+    for i, line in ipairs(DEFAULT_TAUNT_LINES) do
+        rowIndex = rowIndex + 1
+        local row = GetOrCreateRow(rowIndex)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
+        row:Show()
+
+        local disabled = DidYouDieDB.disabledDefaults and DidYouDieDB.disabledDefaults[i]
+
+        SetToggleState(row.toggle, not disabled)
+        SetRowBg(row, rowIndex, disabled)
+
+        if disabled then
+            row.text:SetTextColor(0.4, 0.4, 0.4, 1)
+        else
+            row.text:SetTextColor(0.75, 0.75, 0.75, 1)
+        end
+
+        local capturedI = i
+        row.toggle:SetScript("OnClick", function()
+            if DidYouDieDB.disabledDefaults[capturedI] then
+                DidYouDieDB.disabledDefaults[capturedI] = nil
+            else
+                DidYouDieDB.disabledDefaults[capturedI] = true
+            end
+            RefreshList()
+        end)
+
+        row.text:SetText(line)
+        row.del:Hide()  -- Defaults können nicht gelöscht werden
+
+        y = y + ROW_HEIGHT
+    end
+
+    -- 2) Custom-Sprüche
+    for ci, line in ipairs(DidYouDieDB.customLines) do
+        rowIndex = rowIndex + 1
+        local row = GetOrCreateRow(rowIndex)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
+        row:Show()
+
+        SetToggleState(row.toggle, true)
+        SetRowBg(row, rowIndex, false)
+        row.toggle:SetScript("OnClick", nil)  -- kein Toggle für Custom
+
+        row.text:SetText(line)
+        row.text:SetTextColor(1, 1, 1, 1)  -- Weiß für Custom
+
+        row.del:Show()
+        local capturedCI = ci
+        row.del:SetScript("OnClick", function()
+            table.remove(DidYouDieDB.customLines, capturedCI)
+            RefreshList()
+        end)
+
+        y = y + ROW_HEIGHT
+    end
+
+    scrollChild:SetHeight(math.max(y, SCROLL_HEIGHT))
+end
+
+-- Hinzufügen-Button Logik
+addButton:SetScript("OnClick", function()
+    local txt = addBox:GetText()
+    if txt and txt:match("%S") then  -- nicht nur Whitespace
+        txt = txt:match("^%s*(.-)%s*$")  -- trim
+        table.insert(DidYouDieDB.customLines, txt)
+        addBox:SetText("")
+        RefreshList()
+    end
+end)
+
+-- Enter in der EditBox = Hinzufügen
+addBox:SetScript("OnEnterPressed", function(self)
+    addButton:Click()
+    self:ClearFocus()
+end)
+
+-- Reset-Defaults-Button Logik
+resetLinesButton:SetScript("OnClick", function()
+    DidYouDieDB.disabledDefaults = {}
+    RefreshList()
+end)
+
+-- Panel wird geöffnet → Liste neu aufbauen
+panel:SetScript("OnShow", function()
+    UpdateMenuText()
+    RefreshList()
+end)
 
 local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
 Settings.RegisterAddOnCategory(category)
@@ -281,7 +553,8 @@ frame:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "PLAYER_DEAD" then
         DidYouDieDB.count = (DidYouDieDB.count or 0) + 1
         deathText:SetText("Bleib liegen du Pfosten!  (Tod Nr. " .. DidYouDieDB.count .. ")")
-        tauntText:SetText(TAUNT_LINES[math.random(#TAUNT_LINES)])
+        local activeLines = BuildActiveLines()
+        tauntText:SetText(activeLines[math.random(#activeLines)])
         InitBounce()
         deathFrame:Show()
         animationGroup:Play()
