@@ -96,10 +96,6 @@ local function BuildActiveLines()
     for _, line in ipairs(DidYouDieDB.customLines) do
         lines[#lines + 1] = line
     end
-    -- fallback so we never have zero lines
-    if #lines == 0 then
-        lines[1] = "Skill issue."
-    end
     return lines
 end
 
@@ -285,21 +281,66 @@ local listHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 listHeader:SetPoint("TOPLEFT", prevAnchor, "BOTTOMLEFT", 0, -20)
 listHeader:SetText("Sprüche:")
 
--- Legende
-local legendDefault = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-legendDefault:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 4, -4)
-legendDefault:SetText("|cFFAAAAAA■|r Default    |cFFFFFFFF■|r Custom")
-
 -- "Reset to Default"-Button (rechts vom Header)
 local resetLinesButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 resetLinesButton:SetPoint("LEFT", listHeader, "RIGHT", 12, 0)
-resetLinesButton:SetText("Defaults zurücksetzen")
-resetLinesButton:SetSize(160, 22)
+resetLinesButton:SetText("Alles zurücksetzen")
+resetLinesButton:SetSize(150, 22)
 
--- Eingabezeile: EditBox + Hinzufügen-Button
--- Wir platzieren diese OBERHALB der Scroll-Liste damit der Benutzer nicht scrollen muss
+-- Toggle-All-Button: alle Defaults an/aus
+local toggleAllButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+toggleAllButton:SetPoint("LEFT", resetLinesButton, "RIGHT", 6, 0)
+toggleAllButton:SetSize(150, 22)
+
+local function UpdateToggleAllButton()
+    local allDisabled = true
+    for i = 1, #DEFAULT_TAUNT_LINES do
+        if not DidYouDieDB.disabledDefaults[i] then
+            allDisabled = false
+            break
+        end
+    end
+    toggleAllButton:SetText(allDisabled and "Alle aktivieren" or "Alle deaktivieren")
+end
+
+-- toggleAllButton OnClick wird nach RefreshList gesetzt (siehe unten)
+
+-- -------------------------------------------------------
+-- Tab-Leiste: Default | Custom
+-- -------------------------------------------------------
+local activeTab = "default"  -- "default" oder "custom"
+
+local tabRow = CreateFrame("Frame", nil, panel)
+tabRow:SetPoint("TOPLEFT", listHeader, "BOTTOMLEFT", 0, -8)
+tabRow:SetSize(560, 28)
+
+-- Eigene Tab-Buttons (kein Blizzard-Template nötig)
+local function MakeTabButton(label, parent)
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(100, 24)
+    btn:SetText(label)
+    return btn
+end
+
+local tabDefault = MakeTabButton("Default", tabRow)
+tabDefault:SetPoint("BOTTOMLEFT", tabRow, "BOTTOMLEFT", 0, 0)
+
+local tabCustom = MakeTabButton("Custom", tabRow)
+tabCustom:SetPoint("LEFT", tabDefault, "RIGHT", 4, 0)
+
+local function UpdateTabs()
+    if activeTab == "default" then
+        tabDefault:SetButtonState("PUSHED", true)
+        tabCustom:SetButtonState("NORMAL")
+    else
+        tabDefault:SetButtonState("NORMAL")
+        tabCustom:SetButtonState("PUSHED", true)
+    end
+end
+
+-- Eingabezeile (nur im Custom-Tab sichtbar)
 local addBox = CreateFrame("EditBox", "DidYouDieAddBox", panel, "InputBoxTemplate")
-addBox:SetPoint("TOPLEFT", legendDefault, "BOTTOMLEFT", 0, -10)
+addBox:SetPoint("TOPLEFT", tabRow, "BOTTOMLEFT", 2, -6)
 addBox:SetSize(340, 22)
 addBox:SetAutoFocus(false)
 addBox:SetMaxLetters(200)
@@ -315,13 +356,28 @@ addButton:SetSize(100, 22)
 local SCROLL_HEIGHT = 260
 local ROW_HEIGHT    = 22
 
--- Hintergrund-Container mit WoW-typischer dunkler Box
+-- Header-Leiste über der Liste: Listenname links, Toggle-All rechts
+local listHeaderBar = CreateFrame("Frame", nil, panel)
+listHeaderBar:SetPoint("TOPLEFT", addBox, "BOTTOMLEFT", 0, -8)
+listHeaderBar:SetSize(552, 20)
+
+local listNameText = listHeaderBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+listNameText:SetPoint("LEFT", listHeaderBar, "LEFT", 2, 0)
+listNameText:SetTextColor(1, 0.82, 0, 1)  -- WoW-Gold
+
+-- Toggle-All direkt in der Header-Leiste, rechtsbündig
+toggleAllButton:SetParent(listHeaderBar)
+toggleAllButton:ClearAllPoints()
+toggleAllButton:SetPoint("RIGHT", listHeaderBar, "RIGHT", 0, 0)
+toggleAllButton:SetSize(130, 18)
+
+-- Hintergrund-Container
 local listBg = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
-listBg:SetPoint("TOPLEFT", addBox, "BOTTOMLEFT", -4, -12)
+listBg:SetPoint("TOPLEFT", listHeaderBar, "BOTTOMLEFT", -4, -4)
 listBg:SetSize(556, SCROLL_HEIGHT + 8)
 
 local scrollFrame = CreateFrame("ScrollFrame", "DidYouDieScrollFrame", panel, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", addBox, "BOTTOMLEFT", 2, -16)
+scrollFrame:SetPoint("TOPLEFT", listHeaderBar, "BOTTOMLEFT", 2, -8)
 scrollFrame:SetSize(516, SCROLL_HEIGHT)
 
 local scrollChild = CreateFrame("Frame", "DidYouDieScrollChild", scrollFrame)
@@ -431,6 +487,33 @@ end
 local RefreshList
 
 RefreshList = function()
+    -- Listentitel und Toggle-All sichtbarkeit
+    if activeTab == "default" then
+        listNameText:SetText("Standard-Sprüche")
+        toggleAllButton:Show()
+    else
+        listNameText:SetText("Eigene Sprüche")
+        toggleAllButton:Hide()
+    end
+
+    -- Tab-Label mit Anzahl aktualisieren
+    local customCount = #DidYouDieDB.customLines
+    tabCustom:SetText(customCount > 0 and ("Custom (" .. customCount .. ")") or "Custom")
+    local disabledCount = 0
+    for _ in pairs(DidYouDieDB.disabledDefaults) do disabledCount = disabledCount + 1 end
+    local defaultLabel = disabledCount > 0
+        and ("Default (" .. (#DEFAULT_TAUNT_LINES - disabledCount) .. "/" .. #DEFAULT_TAUNT_LINES .. ")")
+        or  ("Default (" .. #DEFAULT_TAUNT_LINES .. ")")
+    tabDefault:SetText(defaultLabel)
+    UpdateTabs()
+
+    -- AddBox nur im Custom-Tab
+    if activeTab == "custom" then
+        addBox:Show(); addButton:Show()
+    else
+        addBox:Hide(); addButton:Hide()
+    end
+
     -- Verstecke alle alten Rows
     for _, row in ipairs(rowPool) do
         row:Hide()
@@ -439,68 +522,122 @@ RefreshList = function()
     local y = 0
     local rowIndex = 0
 
-    -- 1) Default-Sprüche
-    for i, line in ipairs(DEFAULT_TAUNT_LINES) do
-        rowIndex = rowIndex + 1
-        local row = GetOrCreateRow(rowIndex)
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
-        row:Show()
+    if activeTab == "default" then
+        -- Default-Sprüche
+        for i, line in ipairs(DEFAULT_TAUNT_LINES) do
+            rowIndex = rowIndex + 1
+            local row = GetOrCreateRow(rowIndex)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
+            row:Show()
 
-        local disabled = DidYouDieDB.disabledDefaults and DidYouDieDB.disabledDefaults[i]
+            local disabled = DidYouDieDB.disabledDefaults and DidYouDieDB.disabledDefaults[i]
 
-        SetToggleState(row.toggle, not disabled)
-        SetRowBg(row, rowIndex, disabled)
+            row.toggle:Show()
+            row.text:SetPoint("LEFT", row.toggle, "RIGHT", 6, 0)
+            SetToggleState(row.toggle, not disabled)
+            SetRowBg(row, rowIndex, disabled)
 
-        if disabled then
-            row.text:SetTextColor(0.4, 0.4, 0.4, 1)
-        else
-            row.text:SetTextColor(0.75, 0.75, 0.75, 1)
+            if disabled then
+                row.text:SetTextColor(0.4, 0.4, 0.4, 1)
+            else
+                row.text:SetTextColor(0.75, 0.75, 0.75, 1)
+            end
+
+            local capturedI = i
+            row.toggle:SetScript("OnClick", function()
+                if DidYouDieDB.disabledDefaults[capturedI] then
+                    DidYouDieDB.disabledDefaults[capturedI] = nil
+                else
+                    DidYouDieDB.disabledDefaults[capturedI] = true
+                end
+                RefreshList()
+            end)
+
+            row.text:SetText(line)
+            row.del:Hide()
+
+            y = y + ROW_HEIGHT
         end
 
-        local capturedI = i
-        row.toggle:SetScript("OnClick", function()
-            if DidYouDieDB.disabledDefaults[capturedI] then
-                DidYouDieDB.disabledDefaults[capturedI] = nil
-            else
-                DidYouDieDB.disabledDefaults[capturedI] = true
+    else
+        -- Custom-Sprüche
+        if #DidYouDieDB.customLines == 0 then
+            -- Leere-Liste-Hinweis
+            rowIndex = rowIndex + 1
+            local row = GetOrCreateRow(rowIndex)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
+            row:Show()
+            SetRowBg(row, 1, false)
+            row.toggle:Hide()
+            row.text:SetText("|cFF888888Noch keine eigenen Sprüche. Füge welche hinzu!|r")
+            row.text:SetPoint("LEFT", row, "LEFT", 8, 0)
+            row.del:Hide()
+            y = y + ROW_HEIGHT
+        else
+            for ci, line in ipairs(DidYouDieDB.customLines) do
+                rowIndex = rowIndex + 1
+                local row = GetOrCreateRow(rowIndex)
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
+                row:Show()
+
+                SetToggleState(row.toggle, true)
+                row.toggle:Show()
+                row.text:SetPoint("LEFT", row.toggle, "RIGHT", 6, 0)
+                SetRowBg(row, rowIndex, false)
+                row.toggle:SetScript("OnClick", nil)
+
+                row.text:SetText(line)
+                row.text:SetTextColor(1, 1, 1, 1)
+
+                row.del:Show()
+                local capturedCI = ci
+                row.del:SetScript("OnClick", function()
+                    table.remove(DidYouDieDB.customLines, capturedCI)
+                    RefreshList()
+                end)
+
+                y = y + ROW_HEIGHT
             end
-            RefreshList()
-        end)
-
-        row.text:SetText(line)
-        row.del:Hide()  -- Defaults können nicht gelöscht werden
-
-        y = y + ROW_HEIGHT
-    end
-
-    -- 2) Custom-Sprüche
-    for ci, line in ipairs(DidYouDieDB.customLines) do
-        rowIndex = rowIndex + 1
-        local row = GetOrCreateRow(rowIndex)
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -y)
-        row:Show()
-
-        SetToggleState(row.toggle, true)
-        SetRowBg(row, rowIndex, false)
-        row.toggle:SetScript("OnClick", nil)  -- kein Toggle für Custom
-
-        row.text:SetText(line)
-        row.text:SetTextColor(1, 1, 1, 1)  -- Weiß für Custom
-
-        row.del:Show()
-        local capturedCI = ci
-        row.del:SetScript("OnClick", function()
-            table.remove(DidYouDieDB.customLines, capturedCI)
-            RefreshList()
-        end)
-
-        y = y + ROW_HEIGHT
+        end
     end
 
     scrollChild:SetHeight(math.max(y, SCROLL_HEIGHT))
+    UpdateToggleAllButton()
 end
+
+-- Tab-Klick-Handler
+tabDefault:SetScript("OnClick", function()
+    activeTab = "default"
+    RefreshList()
+end)
+
+tabCustom:SetScript("OnClick", function()
+    activeTab = "custom"
+    RefreshList()
+end)
+
+-- Toggle-All OnClick (hier, weil RefreshList erst ab hier verfügbar)
+toggleAllButton:SetScript("OnClick", function()
+    local allDisabled = true
+    for i = 1, #DEFAULT_TAUNT_LINES do
+        if not DidYouDieDB.disabledDefaults[i] then
+            allDisabled = false
+            break
+        end
+    end
+    if allDisabled then
+        DidYouDieDB.disabledDefaults = {}
+    else
+        for i = 1, #DEFAULT_TAUNT_LINES do
+            DidYouDieDB.disabledDefaults[i] = true
+        end
+    end
+    UpdateToggleAllButton()
+    RefreshList()
+end)
 
 -- Hinzufügen-Button Logik
 addButton:SetScript("OnClick", function()
@@ -529,6 +666,7 @@ end)
 -- Panel wird geöffnet → Liste neu aufbauen
 panel:SetScript("OnShow", function()
     UpdateMenuText()
+    UpdateToggleAllButton()
     RefreshList()
 end)
 
@@ -555,7 +693,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         DidYouDieDB.count = (DidYouDieDB.count or 0) + 1
         deathText:SetText("Bleib liegen du Pfosten!  (Tod Nr. " .. DidYouDieDB.count .. ")")
         local activeLines = BuildActiveLines()
-        tauntText:SetText(activeLines[math.random(#activeLines)])
+        tauntText:SetText(#activeLines > 0 and activeLines[math.random(#activeLines)] or "Füge eigene Sprüche hinzu oder aktiviere Standard-Sprüche!")
         InitBounce()
         deathFrame:Show()
         animationGroup:Play()
