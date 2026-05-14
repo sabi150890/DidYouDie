@@ -29,7 +29,7 @@ Because dying should hurt a little extra.
 3. Launch WoW and enable the addon in the AddOns menu on the character selection screen
 
 ### CurseForge
-Search for **DidYouDie** on [CurseForge](https://www.curseforge.com/wow/addons) and install via the CurseForge App.
+Search for **DidYouDie** on [CurseForge]([https://www.curseforge.com/wow/addons](https://www.curseforge.com/wow/addons/did-you-die)) and install via the CurseForge App.
 
 ---
 
