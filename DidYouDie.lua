@@ -229,19 +229,9 @@ local function UpdateMenuText()
     statText:SetText("Tode in dieser Sitzung: |cFFFF0000" .. sessionDeathCount .. "|r")
 end
 
--- Reset-Button (Zähler)
-local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-resetButton:SetPoint("TOPLEFT", statText, "BOTTOMLEFT", 0, -8)
-resetButton:SetText("Zähler zurücksetzen")
-resetButton:SetSize(160, 25)
-resetButton:SetScript("OnClick", function()
-    sessionDeathCount = 0
-    UpdateMenuText()
-end)
-
 -- Abschnitt: Tastenauswahl
 local keyHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-keyHeader:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -16)
+keyHeader:SetPoint("TOPLEFT", statText, "BOTTOMLEFT", 0, -16)
 keyHeader:SetText("Taste zum Freischalten des Geist-Buttons:")
 
 local radioButtons = {}
